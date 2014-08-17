@@ -1,0 +1,9 @@
+# Test CustomIntegrator precision
+
+from simtk import openmm
+from simtk import unit
+
+def PrecisionTestIntegrator(tolerance):
+    integrator = openmm.CustomIntegrator(1.0)
+    integrator.
+    return integrator
