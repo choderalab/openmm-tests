@@ -1170,7 +1170,7 @@ class LennardJonesCluster(TestSystem):
         # Create a NonbondedForce object with no cutoff.
         nb = mm.NonbondedForce()
         if cutoff:
-            nb.setNonbondedMethod(mm.NonbondedForce.CutoffPeriodic)
+            nb.setNonbondedMethod(mm.NonbondedForce.CutoffNonPeriodic)
             nb.setCutoffDistance(cutoff)
             nb.setUseSwitchingFunction(switch)
             nb.setSwitchingDistance(cutoff-switch_width)

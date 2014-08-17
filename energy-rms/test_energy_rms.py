@@ -129,7 +129,7 @@ def select_options(options_list, index):
 #=============================================================================================
 
 # Sets of parameters to regress over.
-systems_to_try = ['FourSiteWaterBox', 'UnconstrainedDiatomicFluid', 'ConstrainedDiatomicFluid', 'UnconstrainedDipolarFluid', 'ConstrainedDipolarFluid', 'Diatom', 'DischargedWaterBox', 'DischargedWaterBoxHsites', 'SodiumChlorideCrystal', 'HarmonicOscillator', 'LennardJonesCluster', 'LennardJonesFluid', 'WaterBox', 'FlexibleWaterBox'] # testsystems to try
+systems_to_try = ['FourSiteWaterBox', 'UnconstrainedDiatomicFluid', 'ConstrainedDiatomicFluid', 'UnconstrainedDipolarFluid', 'ConstrainedDipolarFluid', 'Diatom', 'DischargedWaterBox', 'DischargedWaterBoxHsites', 'SodiumChlorideCrystal', 'HarmonicOscillator', 'LennardJonesCluster', 'LennardJonesFluid', 'WaterBox', 'FlexibleWaterBox', 'LennardJonesClusterCutoff', 'LennardJonesClusterSwitch'] # testsystems to try
 integrators_to_try = ['VerletIntegrator', 'VelocityVerletIntegrator'] # testsystems to try
 switching_to_try = [False, True] # switching function flags
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
@@ -139,7 +139,6 @@ constraint_tolerances_to_try = [1.0e-10, 1.0e-5] # constraint tolerances to try 
 # Timesteps to try for each parameter set.
 timesteps_to_try = units.Quantity([0.125, 0.250, 0.5, 1.0], units.femtoseconds) # MD timesteps to test for each system
 ntimesteps_to_try = len(timesteps_to_try)
-platform_names_to_try = ['Reference'] # platform names to try
 
 # Number of GPUs.
 ngpus = 4
@@ -157,8 +156,9 @@ ghmc_timestep = 1.0 * units.femtoseconds
 nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
-systems_to_try = ['LennardJonesClusterCutoff', 'LennardJonesClusterSwitch', 'LennardJonesCluster', 'LennardJonesFluid']
+#systems_to_try = ['LennardJonesClusterCutoff', 'LennardJonesClusterSwitch', 'LennardJonesCluster', 'LennardJonesFluid']
 precision_models_to_try = ['double'] # precision models to try
+platform_names_to_try = ['Reference'] # platform names to try
 
 verbose = True
 
@@ -214,7 +214,7 @@ for index in range(rank, nsystems, size):
     # Attempt to resume if file exists.
     if not os.path.exists(netcdf_filename):
         # Select platform.
-        platform_name = 'CUDA'
+        platform_name = 'Reference'
         precision_model = 'double'
     
         platform = openmm.Platform.getPlatformByName(platform_name)
