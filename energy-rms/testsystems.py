@@ -1974,7 +1974,7 @@ class DischargedWaterBox(WaterBox):
 
    def __init__(self, *args, **kwargs):
        """
-       Create a water box test systemm using a four-site water model (TIP4P-Ew).
+       Create a water box test systemm using a three-site water model (TIP3P).
        
        Parameters are inherited from WaterBox.
        
@@ -2004,6 +2004,93 @@ class DischargedWaterBox(WaterBox):
            [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
            force.setExceptionParameters(index, particle1, particle2, 0*chargeProd, sigma, epsilon)
            
+       return
+
+class FlexibleDischargedWaterBox(WaterBox):
+   """
+   Flexible water box test system with zeroed charges.
+
+   """
+
+   def __init__(self, *args, **kwargs):
+       """
+       Create a water box test systemm using a three-site water model (TIP3P).
+       
+       Parameters are inherited from WaterBox.
+       
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = DischargedWaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       Control the cutoff.
+       
+       >>> waterbox = FlexibleDischargedWaterBox(box_edge=3.0*units.nanometers, cutoff=1.0*units.nanometers)
+       
+       """
+       super(DischargedWaterBox, self).__init__(constraints=False, *args, **kwargs)
+
+       # Zero charges.
+       system = self.system
+       forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+       force = forces['NonbondedForce']
+       for index in range(force.getNumParticles()):
+           [charge, sigma, epsilon] = force.getParticleParameters(index)
+           force.setParticleParameters(index, 0*charge, sigma, epsilon)
+       for index in range(force.getNumExceptions()):
+           [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
+           force.setExceptionParameters(index, particle1, particle2, 0*chargeProd, sigma, epsilon)
+           
+       return
+
+class GiantFlexibleDischargedWaterBox(WaterBox):
+   """
+   Flexible water box test system with zeroed charges in a giant box.
+
+   """
+
+   def __init__(self, scale=100.0, *args, **kwargs):
+       """
+       Create a water box test systemm using a three-site water model (TIP3P).
+       
+       Parameters are inherited from WaterBox.
+       
+       Parameters
+       ----------
+       scale : float
+          The scaling factor by which the box vectors are enlarged after creating the system.
+
+       Examples
+       --------
+       
+       Create a default waterbox.
+       
+       >>> waterbox = FlexibleDischargedWaterBox()
+       >>> [system, positions] = [waterbox.system, waterbox.positions]
+       
+       """
+       super(DischargedWaterBox, self).__init__(constraints=False, *args, **kwargs)
+
+       # Zero charges.
+       system = self.system
+       forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+       force = forces['NonbondedForce']
+       for index in range(force.getNumParticles()):
+           [charge, sigma, epsilon] = force.getParticleParameters(index)
+           force.setParticleParameters(index, 0*charge, sigma, epsilon)
+       for index in range(force.getNumExceptions()):
+           [particle1, particle2, chargeProd, sigma, epsilon] = force.getExceptionParameters(index)
+           force.setExceptionParameters(index, particle1, particle2, 0*chargeProd, sigma, epsilon)
+
+       # Enlarge the box vectors and cutoff after system has been created.
+       box_vectors = system.getDefaultPeriodicBoxVectors()
+       system.setDefaultPeriodicBoxVectors(scale*box_vectors[0], scale*box_vectors[1], scale*box_vectors[2])
+       cutoff = force.getCutoffDistance()
+       force.setCutoffDistance(scale*cutoff)
+
        return
 
 class DischargedWaterBoxHsites(WaterBox):

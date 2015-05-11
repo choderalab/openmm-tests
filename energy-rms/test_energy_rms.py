@@ -157,6 +157,7 @@ nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
 #systems_to_try = ['LennardJonesClusterCutoff', 'LennardJonesClusterSwitch', 'LennardJonesCluster', 'LennardJonesFluid']
+systems_to_try = ['GiantFlexibleDischargedWaterBox', 'FlexibleDischargedWaterBox']
 precision_models_to_try = ['double'] # precision models to try
 platform_names_to_try = ['Reference'] # platform names to try
 
