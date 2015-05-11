@@ -19,7 +19,8 @@
 #       (you are always charged for the entire node)
 ##PBS -l nodes=1:ppn=1:gpus=1:shared:gtxtitan
 ##PBS -l nodes=1:ppn=1:gpus=1:shared:gtx680
-#PBS -l nodes=4,tpn=1,gpus=1:shared:gtx680
+#PBS -l nodes=10,tpn=1,gpus=1:shared:gtx680
+##PBS -l nodes=1:ppn=4:gpus=4:shared:gpu-1-12
 #
 # export all my environment variables to the job
 ##PBS -V
