@@ -231,7 +231,7 @@ for index in range(rank, nsystems, size):
         # Create system to simulate.
         print ""
         print "Creating system %s..." % system_name
-        import testsystems
+        from openmmtools import testsystems
         constructor = getattr(testsystems, system_name)
         import inspect
         if 'switch' in inspect.getargspec(constructor.__init__).args:
@@ -250,7 +250,7 @@ for index in range(rank, nsystems, size):
         print "Node %d: Box has %d particles" % (rank, nparticles)
 
         # Equilibrate with Monte Carlo barostat.
-        from integrators import GHMCIntegrator
+        from openmmtools.integrators import GHMCIntegrator
         import copy
         system_with_barostat = copy.deepcopy(system)
         barostat = openmm.MonteCarloBarostat(pressure, temperature)
@@ -413,7 +413,7 @@ for index in range(rank, noptionsets, size):
         if integrator_name == 'VerletIntegrator':
             integrator = openmm.VerletIntegrator(timestep)
         elif integrator_name == 'VelocityVerletIntegrator':
-            from integrators import VelocityVerletIntegrator
+            from openmmtools.integrators import VelocityVerletIntegrator
             integrator = VelocityVerletIntegrator(timestep)
         else:
             raise Exception("Integrator '%s' unknown." % integrator_name)
