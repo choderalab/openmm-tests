@@ -157,9 +157,9 @@ nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
 #systems_to_try = ['LennardJonesClusterCutoff', 'LennardJonesClusterSwitch', 'LennardJonesCluster', 'LennardJonesFluid']
-systems_to_try = ['GiantFlexibleDischargedWaterBox', 'FlexibleDischargedWaterBox']
-precision_models_to_try = ['double'] # precision models to try
-platform_names_to_try = ['Reference'] # platform names to try
+#systems_to_try = ['GiantFlexibleDischargedWaterBox', 'FlexibleDischargedWaterBox']
+#precision_models_to_try = ['double'] # precision models to try
+#platform_names_to_try = ['Reference'] # platform names to try
 
 verbose = True
 
@@ -183,10 +183,13 @@ except:
     print "mpi4py not available---using serial execution."
     rank = 0
     size = 1
-    
+
 print "%d / %d" % (rank, size)
 
-MPI.COMM_WORLD.barrier()
+try:
+    MPI.COMM_WORLD.barrier()
+except:
+    pass
 
 # Count total number of optionsets.
 noptionsets = 1
@@ -330,7 +333,10 @@ for index in range(rank, nsystems, size):
 # Wait for everyone to catch up
 #=============================================================================================
 
-MPI.COMM_WORLD.barrier()
+try:
+    MPI.COMM_WORLD.barrier()
+except:
+    pass
 
 #=============================================================================================
 # Parallelize computing total energy RMS and drift over many combinations of parameters
