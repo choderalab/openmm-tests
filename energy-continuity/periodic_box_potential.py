@@ -6,7 +6,7 @@ sigma = 3.4 * unit.angstrom # argon
 epsilon = 0.238 * unit.kilocalories_per_mole # argon
 
 #switch_width = 0.5 * unit.angstrom
-switch_width = 1.0 * sigma
+switch_width = 0.5 * sigma
 cutoff = 3.0 * sigma
 use_switch = True
 box = 2*cutoff + 1.0 * unit.angstrom
