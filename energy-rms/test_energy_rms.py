@@ -24,7 +24,9 @@ import os.path
 import simtk.unit as units
 import simtk.openmm as openmm
 
-import netCDF4 as netcdf 
+from openmmtools import testsystems
+
+import netCDF4 as netcdf
 
 #=============================================================================================
 # CONSTANTS
@@ -124,12 +126,36 @@ def select_options(options_list, index):
         index = int(index/noptions)
     return selected_options
 
+def get_all_subclasses(cls):
+    """
+    Return all subclasses of a specified class.
+
+    Parameters
+    ----------
+    cls : class
+       The class for which all subclasses are to be returned.
+
+    Returns
+    -------
+    all_subclasses : list of class
+       List of all subclasses of `cls`.
+
+    """
+
+    all_subclasses = []
+
+    for subclass in cls.__subclasses__():
+        all_subclasses.append(subclass)
+        all_subclasses.extend(get_all_subclasses(subclass))
+
+    return all_subclasses
+
 #=============================================================================================
 # PARAMETERS
 #=============================================================================================
 
 # Sets of parameters to regress over.
-systems_to_try = ['FourSiteWaterBox', 'UnconstrainedDiatomicFluid', 'ConstrainedDiatomicFluid', 'UnconstrainedDipolarFluid', 'ConstrainedDipolarFluid', 'Diatom', 'DischargedWaterBox', 'DischargedWaterBoxHsites', 'SodiumChlorideCrystal', 'HarmonicOscillator', 'LennardJonesCluster', 'LennardJonesFluid', 'WaterBox', 'FlexibleWaterBox', 'LennardJonesClusterCutoff', 'LennardJonesClusterSwitch'] # testsystems to try
+systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) ] # all testsystems
 integrators_to_try = ['VerletIntegrator', 'VelocityVerletIntegrator'] # testsystems to try
 switching_to_try = [False, True] # switching function flags
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
@@ -234,7 +260,6 @@ for index in range(rank, nsystems, size):
         # Create system to simulate.
         print ""
         print "Creating system %s..." % system_name
-        from openmmtools import testsystems
         constructor = getattr(testsystems, system_name)
         import inspect
         if 'switch' in inspect.getargspec(constructor.__init__).args:
