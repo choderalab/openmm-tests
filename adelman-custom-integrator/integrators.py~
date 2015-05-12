@@ -570,6 +570,7 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     #
     # Metropolized symplectic step.
     #
+    integrator.addComputeGlobal("ke", "0.0")    
     integrator.addComputeSum("ke", "0.5*m*v*v")
     integrator.addComputeGlobal("Eold", "ke + energy")
     integrator.addComputePerDof("xold", "x")
@@ -580,6 +581,7 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     integrator.addConstrainPositions();
     integrator.addComputePerDof("v", "v + 0.5*dt*f/m + (x-x1)/dt")
     integrator.addConstrainVelocities();
+    integrator.addComputeGlobal("ke", "0.0")    
     integrator.addComputeSum("ke", "0.5*m*v*v")
     integrator.addComputeGlobal("Enew", "ke + energy")
     integrator.addComputeGlobal("accept", "step(exp(-(Enew-Eold)/kT) - uniform)")

@@ -531,8 +531,9 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     #
     # Integrator initialization.
     #
+    b = numpy.exp(-gamma*timestep)
     integrator.addGlobalVariable("kT", kT) # thermal energy
-    integrator.addGlobalVariable("b", numpy.exp(-gamma*timestep)) # velocity mixing parameter
+    integrator.addGlobalVariable("b", b) # velocity mixing parameter
     integrator.addPerDofVariable("sigma", 0) 
     integrator.addGlobalVariable("ke", 0) # kinetic energy
     integrator.addPerDofVariable("vold", 0) # old velocities
@@ -543,6 +544,9 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     integrator.addGlobalVariable("naccept", 0) # number accepted
     integrator.addGlobalVariable("ntrials", 0) # number of Metropolization trials
     integrator.addPerDofVariable("x1", 0) # position before application of constraints
+    integrator.addGlobalVariable("alpha", numpy.sqrt(b))
+    integrator.addGlobalVariable("beta", numpy.sqrt(1-b)) 
+    integrator.addPerDofVariable("zeta", 0)
     
     #
     # Pre-computation.
@@ -565,12 +569,18 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     # Velocity perturbation.
     #
     integrator.addComputePerDof("v", "sqrt(b)*v + sqrt(1-b)*sigma*gaussian")
+    #integrator.addComputePerDof("v", "sqrt(b)*v")
+    #integrator.addComputePerDof("v", "v + sqrt(1-b)*sigma*gaussian")
+    #integrator.addComputePerDof("v", "alpha*v + beta*sigma*gaussian")
+    #integrator.addComputePerDof("v", "alpha*v")
+    #integrator.addComputePerDof("v", "v + beta*sigma*gaussian")
+    #integrator.addComputePerDof("zeta", "gaussian")
+    #integrator.addComputePerDof("v", "alpha*v + beta*sigma*zeta")
     integrator.addConstrainVelocities();
     
     #
     # Metropolized symplectic step.
     #
-    integrator.addComputeGlobal("ke", "0.0")    
     integrator.addComputeSum("ke", "0.5*m*v*v")
     integrator.addComputeGlobal("Eold", "ke + energy")
     integrator.addComputePerDof("xold", "x")
@@ -581,7 +591,6 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     integrator.addConstrainPositions();
     integrator.addComputePerDof("v", "v + 0.5*dt*f/m + (x-x1)/dt")
     integrator.addConstrainVelocities();
-    integrator.addComputeGlobal("ke", "0.0")    
     integrator.addComputeSum("ke", "0.5*m*v*v")
     integrator.addComputeGlobal("Enew", "ke + energy")
     integrator.addComputeGlobal("accept", "step(exp(-(Enew-Eold)/kT) - uniform)")
@@ -592,6 +601,8 @@ def GHMCIntegrator(temperature=298.0*simtk.unit.kelvin, collision_rate=91.0/simt
     # Velocity randomization
     #
     integrator.addComputePerDof("v", "sqrt(b)*v + sqrt(1-b)*sigma*gaussian")
+    #integrator.addComputePerDof("zeta", "gaussian")
+    #integrator.addComputePerDof("v", "alpha*v + beta*sigma*zeta")
     integrator.addConstrainVelocities();
 
     #

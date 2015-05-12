@@ -130,7 +130,7 @@ def WCAFluid(N=natoms, density=density, mm=None, mass=mass, epsilon=epsilon, sig
         force.addParticle([])    
     
     # Set periodic boundary conditions with cutoff.
-    force.setNonbondedMethod(mm.CustomNonbondedForce.CutoffNonPeriodic)
+    force.setNonbondedMethod(mm.CustomNonbondedForce.CutoffPeriodic)
     print "setting cutoff distance to %s" % str(r_WCA)
     force.setCutoffDistance(r_WCA)    
 

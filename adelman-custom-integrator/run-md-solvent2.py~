@@ -89,6 +89,7 @@ if __name__ == "__main__":
     # Compute timestep.
     equilibrate_timestep = 2 * wcadimer.stable_timestep
     timestep = 5 * wcadimer.stable_timestep
+    #timestep = equilibrate_timestep # DEBUG
     print "equilibrate timestep = %.1f fs, switch timestep = %.1f fs" % (equilibrate_timestep / units.femtoseconds, timestep / units.femtoseconds)
 
     # Set temperature, pressure, and collision rate for stochastic thermostats.
@@ -123,13 +124,15 @@ if __name__ == "__main__":
 
     # Select platform.
     #platform = openmm.Platform.getPlatformByName("CPU")
-    platform = openmm.Platform.getPlatformByName("CPU")
+    #platform = openmm.Platform.getPlatformByName("CPU")
+    platform = openmm.Platform.getPlatformByName("OpenCL")
+    #platform = openmm.Platform.getPlatformByName("CUDA")
     #min_platform = openmm.Platform.getPlatformByName("Reference")
     min_platform = openmm.Platform.getPlatformByName("CPU")
-    #deviceid = 3
+    #deviceid = 2
     #platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid)
     #platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid)         
-    #platform.setPropertyDefaultValue('OpenCLPrecision', 'mixed')
+    platform.setPropertyDefaultValue('OpenCLPrecision', 'double')
     #platform.setPropertyDefaultValue('CudaPrecision', 'double')
 
     # Initialize netcdf file.

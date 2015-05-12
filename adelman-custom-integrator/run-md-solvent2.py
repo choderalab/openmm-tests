@@ -63,6 +63,27 @@ from integrators import GHMCIntegrator
 def norm(n01):
     return n01.unit * numpy.sqrt(numpy.dot(n01/n01.unit, n01/n01.unit))
 
+def print_energy_and_forces(platform_name, system, positions, precision_model):
+    platform = openmm.Platform.getPlatformByName(platform_name)
+    if platform_name == "OpenCL":
+        platform.setPropertyDefaultValue('OpenCLPrecision', precision_model)
+    elif platform_name == "CUDA":
+        platform.setPropertyDefaultValue('CudaPrecision', precision_model)
+
+    integrator = openmm.VerletIntegrator(0.001)
+    context = openmm.Context(system, integrator, platform)
+    context.setPositions(positions)
+    state = context.getState(getEnergy=True, getForces=True)
+    potential_energy = state.getPotentialEnergy()
+    forces = state.getForces()
+    print "%9s : %6s : %24.12f kJ/mol : " % (platform_name, precision_model, potential_energy / units.kilojoules_per_mole), 
+    for i in range(2):
+        print "[",
+        for k in range(3):
+            print "%12.6f" % (forces[i][k] / (units.kilojoules_per_mole/units.nanometers)),
+        print "] ",
+    print "kJ/mol/nm"
+
 #=============================================================================================
 # MAIN AND TESTS
 #=============================================================================================
@@ -125,15 +146,22 @@ if __name__ == "__main__":
     # Select platform.
     #platform = openmm.Platform.getPlatformByName("CPU")
     #platform = openmm.Platform.getPlatformByName("CPU")
-    platform = openmm.Platform.getPlatformByName("OpenCL")
     #platform = openmm.Platform.getPlatformByName("CUDA")
     #min_platform = openmm.Platform.getPlatformByName("Reference")
     min_platform = openmm.Platform.getPlatformByName("CPU")
     #deviceid = 2
     #platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid)
     #platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid)         
-    platform.setPropertyDefaultValue('OpenCLPrecision', 'double')
-    #platform.setPropertyDefaultValue('CudaPrecision', 'double')
+
+    platform_name = "OpenCL"
+    precision_model = "double"
+
+    platform = openmm.Platform.getPlatformByName(platform_name)
+    if platform_name == "OpenCL":
+        platform.setPropertyDefaultValue('OpenCLPrecision', precision_model)
+    elif platform_name == "CUDA":
+        platform.setPropertyDefaultValue('CudaPrecision', precision_model)
+
 
     # Initialize netcdf file.
     if not os.path.exists(netcdf_filename):
@@ -189,6 +217,10 @@ if __name__ == "__main__":
     state = context.getState(getPositions=True)
 
     while (iteration < niterations):
+
+        # DEBUG
+        context.setVelocitiesToTemperature(temperature)
+
         print "iteration %5d / %5d" % (iteration, niterations)
         print 'coordinates: ', coordinates[0,:] / units.angstrom
         initial_time = time.time()
@@ -207,7 +239,7 @@ if __name__ == "__main__":
         print "%.3f %% accepted" % (fraction_accepted * 100.0)
         
         state = context.getState(getPositions=True)
-        coordinates = state.getPositions(asNumpy=True)
+        positions = state.getPositions(asNumpy=True)
         
         final_distance = norm(coordinates[1,:] - coordinates[0,:])            
         print "Dynamics %.1f A -> %.1f A (barrier at %.1f A)" % (initial_distance / units.angstroms, final_distance / units.angstroms, (r0+w)/units.angstroms)
@@ -215,13 +247,17 @@ if __name__ == "__main__":
         
         # Record attempt
         ncfile.variables['distance'][iteration] = final_distance / units.angstroms
-        ncfile.variables['positions'][iteration,:,:] = coordinates[:,:] / units.angstroms
+        ncfile.variables['positions'][iteration,:,:] = positions[:,:] / units.angstroms
         ncfile.sync()
 
         # Debug.
         final_time = time.time()
         elapsed_time = final_time - initial_time
         print "%12.3f s elapsed" % elapsed_time
+
+        # Compare platform and reference energies and forces.
+        for platform_name in ["Reference", "CPU", "CUDA", "OpenCL"]:
+            print_energy_and_forces(platform_name, system, positions, precision_model)
 
         # Increment iteration counter.
         iteration += 1
