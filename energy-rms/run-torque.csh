@@ -19,8 +19,8 @@
 #       (you are always charged for the entire node)
 ##PBS -l nodes=1:ppn=1:gpus=1:shared:gtxtitan
 ##PBS -l nodes=1:ppn=1:gpus=1:shared:gtx680
-#PBS -l nodes=10,tpn=1,gpus=1:shared:gtx680
 ##PBS -l nodes=1:ppn=4:gpus=4:shared:gpu-1-12
+#PBS -l nodes=16,tpn=1,gpus=1:shared:gtxtitan
 #
 # export all my environment variables to the job
 ##PBS -V
@@ -54,6 +54,7 @@ which python
 setenv OPENMM_CPU_THREADS 1
 
 date
-mpirun -rmk pbs python test_energy_rms.py
+build_mpirun_configfile  --mpitype=conda "python test_energy_rms.py"
+mpirun -configfile configfile
 date
 

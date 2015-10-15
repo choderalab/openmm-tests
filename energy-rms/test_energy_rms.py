@@ -167,7 +167,7 @@ timesteps_to_try = units.Quantity([0.125, 0.250, 0.5, 1.0], units.femtoseconds) 
 ntimesteps_to_try = len(timesteps_to_try)
 
 # Number of GPUs.
-ngpus = 4
+#ngpus = 4
 
 # Other data
 simulation_length = 100.0 * units.femtoseconds # length of simulation segment
@@ -182,10 +182,11 @@ ghmc_timestep = 1.0 * units.femtoseconds
 nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
-#systems_to_try = ['LennardJonesClusterCutoff', 'LennardJonesClusterSwitch', 'LennardJonesCluster', 'LennardJonesFluid']
+#systems_to_try = ['LennardJonesFluid', 'LennardJonesCluster']
 #systems_to_try = ['GiantFlexibleDischargedWaterBox', 'FlexibleDischargedWaterBox']
-#precision_models_to_try = ['double'] # precision models to try
-#platform_names_to_try = ['Reference'] # platform names to try
+#precision_models_to_try = ['double', 'mixed', 'single'] # precision models to try
+#platform_names_to_try = ['OpenCL'] # platform names to try
+#nequil = 5 # number of NPT equilibration iterations
 
 verbose = True
 
@@ -223,7 +224,10 @@ for optionset in options_list:
     noptionsets *= len(optionset)
 if rank == 0: print "There are %d option sets to try." % noptionsets
 
-
+if rank == 0:
+    if not os.path.exists('data'):
+        os.makedirs('data')
+    
 #=============================================================================================
 # PARALLELIZE EQUILIBRATION
 #=============================================================================================
@@ -248,12 +252,13 @@ for index in range(rank, nsystems, size):
         precision_model = 'double'
     
         platform = openmm.Platform.getPlatformByName(platform_name)
-        deviceid = rank % ngpus
+        #deviceid = rank % ngpus
+        deviceid = 0
         if platform_name == 'CUDA':
-            platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid) # select Cuda device index    
+            #platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid) # select Cuda device index    
             platform.setPropertyDefaultValue('CudaPrecision', precision_model)        
         elif platform_name == 'OpenCL':
-            platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid) # select OpenCL device index
+            #platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid) # select OpenCL device index
             platform.setPropertyDefaultValue('OpenCLPrecision', precision_model)        
         print "node %3d using GPU %d platform %s precision %s" % (rank, deviceid, platform_name, precision_model)
         
@@ -394,12 +399,13 @@ for index in range(rank, noptionsets, size):
     #=============================================================================================
 
     platform = openmm.Platform.getPlatformByName(platform_name)
-    deviceid = rank % ngpus
+    #deviceid = rank % ngpus
+    deviceid = 0
     if platform_name == 'CUDA':
-        platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid) # select Cuda device index    
+        #platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid) # select Cuda device index    
         platform.setPropertyDefaultValue('CudaPrecision', precision_model)        
     elif platform_name == 'OpenCL':
-        platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid) # select OpenCL device index
+        #platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid) # select OpenCL device index
         platform.setPropertyDefaultValue('OpenCLPrecision', precision_model)        
     print "node %3d using GPU %d platform %s precision %s" % (rank, deviceid, platform_name, precision_model)
 
