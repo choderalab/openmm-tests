@@ -150,6 +150,24 @@ def get_all_subclasses(cls):
 
     return all_subclasses
 
+def set_pme_tolerance(system, pme_tolerance):
+    """
+    Set the PME tolerance
+
+    Parameters
+    ----------
+    system : simtk.openmm.System
+        System to be modified
+    pme_tolerance : float
+        PME tolerance to use
+
+    """
+    forces = { system.getForce(index).__class__.__name__ : system.getForce(index) for index in range(system.getNumForces()) }
+    if 'NonbondedForce' in forces:
+        force = forces['NonbondedForce']
+        force.setEwaldErrorTolerance(pme_tolerance)
+    return
+
 #=============================================================================================
 # PARAMETERS
 #=============================================================================================
@@ -161,6 +179,7 @@ switching_to_try = [False, True] # switching function flags
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
 precision_models_to_try = ['single', 'mixed', 'double'] # precision models to try
 constraint_tolerances_to_try = [1.0e-10, 1.0e-5] # constraint tolerances to try (for systems with constraints)
+pme_tolerances_to_try = [5.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-10, 1.0e-12]
 
 # Timesteps to try for each parameter set.
 timesteps_to_try = units.Quantity([0.125, 0.250, 0.5, 1.0], units.femtoseconds) # MD timesteps to test for each system
@@ -178,14 +197,13 @@ temperature = 298.0 * units.kelvin
 pressure = 1.0 * units.atmosphere # pressure for equilibration
 
 ghmc_nsteps = 1000 # number of steps to generate new uncorrelated sample with GHMC
-ghmc_timestep = 1.0 * units.femtoseconds
+ghmc_timestep = 0.50 * units.femtoseconds
 nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
-#systems_to_try = ['LennardJonesFluid', 'LennardJonesCluster']
-#systems_to_try = ['GiantFlexibleDischargedWaterBox', 'FlexibleDischargedWaterBox']
-#precision_models_to_try = ['double', 'mixed', 'single'] # precision models to try
-#platform_names_to_try = ['OpenCL'] # platform names to try
+systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if ('Water' in cls.__name__) ] # all water boxes
+precision_models_to_try = ['double'] # precision models to try
+platform_names_to_try = ['CUDA'] # platform names to try
 #nequil = 5 # number of NPT equilibration iterations
 
 verbose = True
@@ -194,7 +212,7 @@ kT = kB * temperature # thermal energy
 beta = 1.0 / kT # inverse temperature
 
 
-options_list = [systems_to_try, integrators_to_try, switching_to_try, platform_names_to_try, precision_models_to_try, constraint_tolerances_to_try]
+options_list = [systems_to_try, integrators_to_try, switching_to_try, platform_names_to_try, precision_models_to_try, constraint_tolerances_to_try, pme_tolerances_to_try]
 print "nrecords = %d" % nrecords
 
 #=============================================================================================
@@ -248,8 +266,9 @@ for index in range(rank, nsystems, size):
     # Attempt to resume if file exists.
     if not os.path.exists(netcdf_filename):
         # Select platform.
-        platform_name = 'Reference'
+        platform_name = 'OpenCL'
         precision_model = 'double'
+        pme_tolerance = 1.0e-8
     
         platform = openmm.Platform.getPlatformByName(platform_name)
         #deviceid = rank % ngpus
@@ -272,6 +291,9 @@ for index in range(rank, nsystems, size):
         else:
             testsystem = constructor()
         [system, positions] = [testsystem.system, testsystem.positions]
+
+        # Set PME tolerance
+        set_pme_tolerance(system, pme_tolerance)
 
         # Determine number of degrees of freedom.
         nvsites = sum([system.isVirtualSite(index) for index in range(system.getNumParticles())])
@@ -339,7 +361,7 @@ for index in range(rank, nsystems, size):
             naccept = ghmc_integrator.getGlobalVariable(ghmc_global_variables['naccept'])
             ntrials = ghmc_integrator.getGlobalVariable(ghmc_global_variables['ntrials'])
             fraction_accepted = float(naccept) / float(ntrials)
-            print "GHMC equil %5d / %5d | accepted %6d / %6d (%7.3f %%) | volume %8.3f nm^3 | max radius %8.3f nm | potential %12.3f kT | temperature %8.3f K" % (iteration, nequil, naccept, ntrials, fraction_accepted*100.0, volume / units.nanometers**3, max_radius / units.nanometers, potential / kT, instantaneous_kinetic_temperature / units.kelvin)
+            print "%64s : GHMC equil %5d / %5d | accepted %6d / %6d (%7.3f %%) | volume %8.3f nm^3 | max radius %8.3f nm | potential %12.3f kT | temperature %8.3f K" % (system_name, iteration, nequil, naccept, ntrials, fraction_accepted*100.0, volume / units.nanometers**3, max_radius / units.nanometers, potential / kT, instantaneous_kinetic_temperature / units.kelvin)
         
         # Extract coordinates and box vectors.
         state = ghmc_context.getState(getPositions=True, getVelocities=True)
@@ -379,7 +401,7 @@ for index in range(rank, noptionsets, size):
     #=============================================================================================
 
     try:
-        [system_name, integrator_name, switching_flag, platform_name, precision_model, constraint_tolerance] = select_options(options_list, index)
+        [system_name, integrator_name, switching_flag, platform_name, precision_model, constraint_tolerance, pme_tolerance] = select_options(options_list, index)
     except:
         continue
 
@@ -387,8 +409,8 @@ for index in range(rank, noptionsets, size):
     # Create filename to store data in.
     #=============================================================================================
 
-    store_filename = 'data/test-%s-%s-%s-%s-%s-%s.nc' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance)
-    text_filename = 'data/test-%s-%s-%s-%s-%s-%s.txt' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance)
+    store_filename = 'data/test-%s-%s-%s-%s-%s-%s-%s.nc' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance)
+    text_filename = 'data/test-%s-%s-%s-%s-%s-%s-%s.txt' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance)
 
     # Skip if we already have written this file.
     if os.path.exists(store_filename) and os.path.exists(text_filename):
@@ -420,6 +442,9 @@ for index in range(rank, noptionsets, size):
     serialized_system = str(ncfile.variables['system'][0])    
     system = openmm.XmlSerializer.deserialize(serialized_system)
     ncfile.close()
+
+    # Set PME tolerance
+    set_pme_tolerance(system, pme_tolerance)
 
     #=============================================================================================
     # Open NetCDF file for writing.
