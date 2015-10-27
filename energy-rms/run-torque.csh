@@ -3,7 +3,7 @@
 #
 #
 # walltime : maximum wall clock time (hh:mm:ss)
-#PBS -l walltime=48:00:00
+#PBS -l walltime=72:00:00
 #
 # join stdout and stderr
 #PBS -j oe
@@ -17,10 +17,8 @@
 # nodes: number of 8-core nodes
 #   ppn: how many cores per node to use (1 through 8)
 #       (you are always charged for the entire node)
-##PBS -l nodes=1:ppn=1:gpus=1:shared:gtxtitan
-##PBS -l nodes=1:ppn=1:gpus=1:shared:gtx680
-##PBS -l nodes=1:ppn=4:gpus=4:shared:gpu-1-12
-#PBS -l nodes=16,tpn=1,gpus=1:shared:gtxtitan
+##PBS -l nodes=16,tpn=1,gpus=1:shared:gtxtitan
+#PBS -l nodes=2:ppn=4:gpus=4:shared:gtxtitan
 #
 # export all my environment variables to the job
 ##PBS -V
@@ -41,14 +39,10 @@
 
 cd $PBS_O_WORKDIR
 
-setenv VVVR_DIR $PBS_O_WORKDIR
-
 echo | grep PYTHONPATH
-
-#canopy
-#openmm-git
-
 which python
+
+cat $PBS_GPUFILE
 
 # Only use one OpenMM CPU thread.
 setenv OPENMM_CPU_THREADS 1

@@ -179,7 +179,7 @@ switching_to_try = [False, True] # switching function flags
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
 precision_models_to_try = ['single', 'mixed', 'double'] # precision models to try
 constraint_tolerances_to_try = [1.0e-10, 1.0e-5] # constraint tolerances to try (for systems with constraints)
-pme_tolerances_to_try = [5.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-10, 1.0e-12]
+pme_tolerances_to_try = [5.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-9]
 
 # Timesteps to try for each parameter set.
 timesteps_to_try = units.Quantity([0.125, 0.250, 0.5, 1.0], units.femtoseconds) # MD timesteps to test for each system
@@ -201,7 +201,7 @@ ghmc_timestep = 0.50 * units.femtoseconds
 nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
-systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if ('Water' in cls.__name__) ] # all water boxes
+systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
 precision_models_to_try = ['double'] # precision models to try
 platform_names_to_try = ['CUDA'] # platform names to try
 #nequil = 5 # number of NPT equilibration iterations
@@ -210,7 +210,6 @@ verbose = True
 
 kT = kB * temperature # thermal energy
 beta = 1.0 / kT # inverse temperature
-
 
 options_list = [systems_to_try, integrators_to_try, switching_to_try, platform_names_to_try, precision_models_to_try, constraint_tolerances_to_try, pme_tolerances_to_try]
 print "nrecords = %d" % nrecords
@@ -266,9 +265,9 @@ for index in range(rank, nsystems, size):
     # Attempt to resume if file exists.
     if not os.path.exists(netcdf_filename):
         # Select platform.
-        platform_name = 'OpenCL'
+        platform_name = 'CUDA'
         precision_model = 'double'
-        pme_tolerance = 1.0e-8
+        pme_tolerance = 1.0e-6
     
         platform = openmm.Platform.getPlatformByName(platform_name)
         #deviceid = rank % ngpus
@@ -459,7 +458,7 @@ for index in range(rank, noptionsets, size):
     #=============================================================================================
  
     outfile = open(text_filename, 'w') 
-    output = '%s : integrator %s | switch %s | platform %s | precision %s | constraint tolerance %s' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance)
+    output = '%s : integrator %s | switch %s | platform %s | precision %s | constraint tolerance %s | pme tolerance %s' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance)
     print output
     outfile.write(output + '\n')
     last_rms_total_energy = None
