@@ -179,10 +179,10 @@ switching_to_try = [False, True] # switching function flags
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
 precision_models_to_try = ['single', 'mixed', 'double'] # precision models to try
 constraint_tolerances_to_try = [1.0e-10, 1.0e-5] # constraint tolerances to try (for systems with constraints)
-pme_tolerances_to_try = [5.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-9]
+pme_tolerances_to_try = [5.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-9, 1.0e-10]
 
 # Timesteps to try for each parameter set.
-timesteps_to_try = units.Quantity([0.125, 0.250, 0.5, 1.0], units.femtoseconds) # MD timesteps to test for each system
+timesteps_to_try = units.Quantity([0.0625, 0.125, 0.250, 0.5, 1.0], units.femtoseconds) # MD timesteps to test for each system
 ntimesteps_to_try = len(timesteps_to_try)
 
 # Number of GPUs.
@@ -204,6 +204,9 @@ nequil = 100 # number of NPT equilibration iterations
 systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
 precision_models_to_try = ['double'] # precision models to try
 platform_names_to_try = ['CUDA'] # platform names to try
+precision_models_to_try = ['double', 'mixed']
+constraint_tolerances_to_try = [1.0e-10]
+integrators_to_try = ['VelocityVerletIntegrator']
 #nequil = 5 # number of NPT equilibration iterations
 
 verbose = True
