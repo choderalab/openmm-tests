@@ -196,12 +196,14 @@ nrecords = int(simulation_length / record_interval)
 temperature = 298.0 * units.kelvin
 pressure = 1.0 * units.atmosphere # pressure for equilibration
 
+max_minimizer_iterations = 1000 # maximum number of minimizer iterations
 ghmc_nsteps = 1000 # number of steps to generate new uncorrelated sample with GHMC
 ghmc_timestep = 0.50 * units.femtoseconds
 nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
-systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
+#systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
+systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if ('Alanine' in cls.__name__) ] # alanine dipeptide systems
 precision_models_to_try = ['double'] # precision models to try
 platform_names_to_try = ['CUDA'] # platform names to try
 precision_models_to_try = ['double', 'mixed']
@@ -264,9 +266,12 @@ for index in range(rank, nsystems, size):
 
     # Determine NetCDF filename for equilibrated system.
     netcdf_filename = 'data/system-%s-%s.nc' % (system_name, switching_flag)
+    log_filename = 'data/system-%s-%s.log' % (system_name, switching_flag)
 
     # Attempt to resume if file exists.
     if not os.path.exists(netcdf_filename):
+        logfile = open(log_filename, 'w')
+
         # Select platform.
         platform_name = 'CUDA'
         precision_model = 'double'
@@ -284,8 +289,7 @@ for index in range(rank, nsystems, size):
         print "node %3d using GPU %d platform %s precision %s" % (rank, deviceid, platform_name, precision_model)
         
         # Create system to simulate.
-        print ""
-        print "Creating system %s..." % system_name
+        logfile.write("Creating system %s...\n" % system_name)
         constructor = getattr(testsystems, system_name)
         import inspect
         if 'switch' in inspect.getargspec(constructor.__init__).args:
@@ -304,7 +308,7 @@ for index in range(rank, nsystems, size):
         ndof = 3*(nparticles - nvsites) - nconstraints
 
         nparticles = system.getNumParticles()        
-        print "Node %d: Box has %d particles" % (rank, nparticles)
+        logfile.write("Node %d: Box has %d particles\n" % (rank, nparticles))
 
         # Equilibrate with Monte Carlo barostat.
         from openmmtools.integrators import GHMCIntegrator
@@ -330,16 +334,18 @@ for index in range(rank, nsystems, size):
         # Set positions and velocities.
         ghmc_context.setPositions(positions)
 
-        # Minimize.
-        print "node %3d minimizing..." % rank
-        openmm.LocalEnergyMinimizer.minimize(ghmc_context, 0.01 * units.kilocalories_per_mole / units.nanometer, 20)
-        print "node %3d minimization complete." % rank
+        # Minimize.        
+        logfile.write("node %3d minimizing...\n" % rank)
+        logfile.write("Energy = %.3f kcal/mol\n" % (ghmc_context.getState(getEnergy=True).getPotentialEnergy() / units.kilocalories_per_mole))
+        openmm.LocalEnergyMinimizer.minimize(ghmc_context, 10 * units.kilojoules_per_mole / units.nanometer, max_minimizer_iterations)
+        logfile.wrtie("node %3d minimization complete.\n" % rank)
+        logfile.write("Energy = %.3f kcal/mol\n" % (ghmc_context.getState(getEnergy=True).getPotentialEnergy() / units.kilocalories_per_mole))
 
         # Compute initial volume.
         state = ghmc_context.getState()
         box_vectors = state.getPeriodicBoxVectors(asNumpy=True)
         volume = box_vectors[0,0] * box_vectors[1,1] * box_vectors[2,2]
-        print "node %d: initial volume %8.3f nm^3" % (rank, volume / units.nanometers**3)
+        logfile.write("node %d: initial volume %8.3f nm^3\n" % (rank, volume / units.nanometers**3))
 
         # Equilibrate system with NPT.
         volume_history = numpy.zeros([nequil], numpy.float64)
@@ -363,7 +369,7 @@ for index in range(rank, nsystems, size):
             naccept = ghmc_integrator.getGlobalVariable(ghmc_global_variables['naccept'])
             ntrials = ghmc_integrator.getGlobalVariable(ghmc_global_variables['ntrials'])
             fraction_accepted = float(naccept) / float(ntrials)
-            print "%64s : GHMC equil %5d / %5d | accepted %6d / %6d (%7.3f %%) | volume %8.3f nm^3 | max radius %8.3f nm | potential %12.3f kT | temperature %8.3f K" % (system_name, iteration, nequil, naccept, ntrials, fraction_accepted*100.0, volume / units.nanometers**3, max_radius / units.nanometers, potential / kT, instantaneous_kinetic_temperature / units.kelvin)
+            logfile.write("%64s : GHMC equil %5d / %5d | accepted %6d / %6d (%7.3f %%) | volume %8.3f nm^3 | max radius %8.3f nm | potential %12.3f kT | temperature %8.3f K\n" % (system_name, iteration, nequil, naccept, ntrials, fraction_accepted*100.0, volume / units.nanometers**3, max_radius / units.nanometers, potential / kT, instantaneous_kinetic_temperature / units.kelvin))
         
         # Extract coordinates and box vectors.
         state = ghmc_context.getState(getPositions=True, getVelocities=True)
@@ -381,7 +387,7 @@ for index in range(rank, nsystems, size):
         ncfile.variables['velocities'][:,:] = velocities / (units.nanometers / units.picoseconds)
         ncfile.variables['box_vectors'][:,:] = box_vectors / units.nanometers
         ncfile.close()
-
+        logfile.close()
 
 #=============================================================================================
 # Wait for everyone to catch up
@@ -485,54 +491,57 @@ for index in range(rank, noptionsets, size):
         # Set constraint tolerance.
         integrator.setConstraintTolerance(constraint_tolerance)
 
-        # Create Context.
-        context = openmm.Context(system, integrator, platform)
-        context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
-        context.setPositions(positions)
-        context.setVelocities(velocities) 
+        try:
+            # Create Context.
+            context = openmm.Context(system, integrator, platform)
+            context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
+            context.setPositions(positions)
+            context.setVelocities(velocities) 
 
-        # Run integrator to eliminate any initial artifacts.
-        integrator.step(nsteps_per_record)
-
-        total_energy_n = numpy.zeros([nrecords], numpy.float64)
-
-        for record in range(nrecords):
-            # Run integrator.
+            # Run integrator to eliminate any initial artifacts.
             integrator.step(nsteps_per_record)
 
-            # Compute total energy.
-            state = context.getState(getEnergy=True)
-            kinetic_energy = state.getKineticEnergy()
-            potential_energy = state.getPotentialEnergy()
-            total_energy = kinetic_energy + potential_energy
+            total_energy_n = numpy.zeros([nrecords], numpy.float64)
 
-            # Store total energy.
-            total_energy_n[record] = total_energy / kT
+            for record in range(nrecords):
+                # Run integrator.
+                integrator.step(nsteps_per_record)
+
+                # Compute total energy.
+                state = context.getState(getEnergy=True)
+                kinetic_energy = state.getKineticEnergy()
+                potential_energy = state.getPotentialEnergy()
+                total_energy = kinetic_energy + potential_energy
+
+                # Store total energy.
+                total_energy_n[record] = total_energy / kT
             
-        # Store summary statistics.
-        rms_total_energy = numpy.std(total_energy_n)
-        total_energy_drift = (total_energy_n[-1] - total_energy_n[0]) / (simulation_length/units.nanoseconds)
+            # Store summary statistics.
+            rms_total_energy = numpy.std(total_energy_n)
+            total_energy_drift = (total_energy_n[-1] - total_energy_n[0]) / (simulation_length/units.nanoseconds)
 
-        ncfile.variables['total_energy'][timestep_index,:] = total_energy_n[:]
-        ncfile.variables['rms_total_energy'][timestep_index] = rms_total_energy
-        ncfile.sync()
+            ncfile.variables['total_energy'][timestep_index,:] = total_energy_n[:]
+            ncfile.variables['rms_total_energy'][timestep_index] = rms_total_energy
+            ncfile.sync()
 
-        output = "timestep %8.3f fs | RMS total energy %20.8f kT | drift %20.8f kT" % (timestep / units.femtoseconds, rms_total_energy, total_energy_drift)
-        print output
-        if last_rms_total_energy:
-            factor = rms_total_energy / last_rms_total_energy
-            outfile.write('%8.3f %24.8e %24.8e %8.3f' % (timestep/units.femtoseconds, rms_total_energy, total_energy_drift, factor))
-        else:
-            outfile.write('%8.3f %24.8e %24.8e %8s' % (timestep/units.femtoseconds, rms_total_energy, total_energy_drift, ''))
-        last_rms_total_energy = rms_total_energy
+            output = "timestep %8.3f fs | RMS total energy %20.8f kT | drift %20.8f kT/ns" % (timestep / units.femtoseconds, rms_total_energy, total_energy_drift)
+            print output
+            if last_rms_total_energy:
+                factor = rms_total_energy / last_rms_total_energy
+                outfile.write('%8.3f %24.8e %24.8e %8.3f' % (timestep/units.femtoseconds, rms_total_energy, total_energy_drift, factor))
+            else:
+                outfile.write('%8.3f %24.8e %24.8e %8s' % (timestep/units.femtoseconds, rms_total_energy, total_energy_drift, ''))
+            last_rms_total_energy = rms_total_energy
 
-        if (total_energy_drift > 1.0):
-            outfile.write('      ***')
+            if (total_energy_drift > 1.0):
+                outfile.write('      ***')
 
-        outfile.write('\n')
+            outfile.write('\n')
         
-        # Clean up
-        del context, integrator
+            # Clean up
+            del context, integrator
+        except Exception as e:
+            print str(e)
 
     # Close output files.
     outfile.close()
