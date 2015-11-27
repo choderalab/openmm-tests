@@ -338,7 +338,7 @@ for index in range(rank, nsystems, size):
         logfile.write("node %3d minimizing...\n" % rank)
         logfile.write("Energy = %.3f kcal/mol\n" % (ghmc_context.getState(getEnergy=True).getPotentialEnergy() / units.kilocalories_per_mole))
         openmm.LocalEnergyMinimizer.minimize(ghmc_context, 10 * units.kilojoules_per_mole / units.nanometer, max_minimizer_iterations)
-        logfile.wrtie("node %3d minimization complete.\n" % rank)
+        logfile.write("node %3d minimization complete.\n" % rank)
         logfile.write("Energy = %.3f kcal/mol\n" % (ghmc_context.getState(getEnergy=True).getPotentialEnergy() / units.kilocalories_per_mole))
 
         # Compute initial volume.
