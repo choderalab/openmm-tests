@@ -23,6 +23,7 @@ import os.path
 
 import simtk.unit as units
 import simtk.openmm as openmm
+from simtk.openmm import app
 
 from openmmtools import testsystems
 
@@ -179,6 +180,7 @@ switching_to_try = [False, True] # switching function flags
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
 precision_models_to_try = ['single', 'mixed', 'double'] # precision models to try
 constraint_tolerances_to_try = [1.0e-10, 1.0e-5] # constraint tolerances to try (for systems with constraints)
+constraints_to_try = [None, app.HBonds] # constraint types to try
 pme_tolerances_to_try = [5.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-9, 1.0e-10]
 
 # Timesteps to try for each parameter set.
@@ -497,6 +499,9 @@ for index in range(rank, noptionsets, size):
             context.setPeriodicBoxVectors(box_vectors[0,:], box_vectors[1,:], box_vectors[2,:])
             context.setPositions(positions)
             context.setVelocities(velocities) 
+
+            # Report initial energy.
+            #outfile.write("initial energy %24.8f kT\n" % (context.getState(getEnergy=True).getPotentialEnergy() / kT))
 
             # Run integrator to eliminate any initial artifacts.
             integrator.step(nsteps_per_record)
