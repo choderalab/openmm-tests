@@ -20,17 +20,21 @@ def timeIntegration(context, steps, initialSteps):
 def measureDrift(context, steps, initialSteps, filename=None, nsteps_per_energy=50, name=""):
     """Integrate a Context for a specified number of steps, then return estimate of drift."""
     print('Measuring drift...')
+    import time
     context.getIntegrator().step(initialSteps) # Make sure everything is fully initialized
     import numpy as np
     nsave = int(float(steps) / float(nsteps_per_energy))
-    times = np.arange(nsave) * context.getIntegrator().getStepSize() / unit.nanoseconds
+    times = np.arange(nsave) * nsteps_per_energy * context.getIntegrator().getStepSize() / unit.nanoseconds
     energies = np.zeros([nsave], np.float64)
     state = context.getState(getEnergy=True)
     energies[0] = (state.getPotentialEnergy() + state.getKineticEnergy()) / unit.kilojoules_per_mole
     for i in range(1,nsave):        
-        context.getIntegrator().step(nsteps_per_energy)
+        start_time = time.time()
+        context.getIntegrator().step(nsteps_per_energy)        
         state = context.getState(getEnergy=True)
         energies[i] = (state.getPotentialEnergy() + state.getKineticEnergy()) / unit.kilojoules_per_mole        
+        end_time = time.time()
+        print('%12.3f ns : %5d / %5d : integrated %d steps in %.3f s' % (times[i], i, nsave, nsteps_per_energy, (end_time-start_time)))
 
     # Fit drift
     from scipy.stats import linregress
@@ -45,8 +49,12 @@ def measureDrift(context, steps, initialSteps, filename=None, nsteps_per_energy=
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_pdf import PdfPages
         with PdfPages(filename) as pdf:
-            plt.figure(figsize=(7, 4))
-            plt.plot(times, energies, '.')
+            plt.figure(figsize=(12, 4.5))
+            plt.plot(times, energies, 'k.')
+            plt.hold(True)
+            plt.plot(times, slope*times + intercept, 'r-') # drift
+            plt.plot(times, times*0 + energies.mean(), 'k-') # zero
+            plt.fill_between(times, (slope+2*stderr)*times + intercept, (slope-2*stderr)*times + intercept, facecolor='gray', alpha=0.5)
             plt.xlabel('time (ns)')
             plt.ylabel('total energy (kJ/mol)')
             plt.title('energy drift for DHFR %s : %8.3f +- %8.3f kJ/mol/ns' % (name, slope, stderr))
@@ -148,6 +156,25 @@ def runOneTest(testName, options):
     print('%g ns/day' % (dt*steps*86400/time).value_in_unit(unit.nanoseconds))
 
     if options.drift is not None:
+        print('Measuring drift with Verlet integrator')
+        state = context.getState(getPositions=True, getVelocities=True)
+        positions = state.getPositions()
+        velocities = state.getVelocities()
+        box_vectors = state.getPeriodicBoxVectors()
+        del context, integ
+
+        integ = mm.VerletIntegrator(dt)
+        print('Step Size: %g fs' % dt.value_in_unit(unit.femtoseconds))
+        initialSteps = 500
+        integ.setConstraintTolerance(1e-8)
+        print('Integrator tolerance: %f' % integ.getConstraintTolerance())
+        if len(properties) > 0:
+            context = mm.Context(system, integ, platform, properties)
+        else:
+            context = mm.Context(system, integ, platform)
+        context.setPeriodicBoxVectors(*box_vectors)
+        context.setPositions(positions)
+        context.setVelocities(velocities)
         measureDrift(context, steps, initialSteps, filename=options.drift, name=options.test)
 
 # Parse the command line options.
