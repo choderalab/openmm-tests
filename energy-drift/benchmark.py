@@ -136,7 +136,7 @@ def runOneTest(testName, options):
     
     # Run the simulation.
     
-    integ.setConstraintTolerance(1e-5)
+    integ.setConstraintTolerance(1e-8)
     if len(properties) > 0:
         context = mm.Context(system, integ, platform, properties)
     else:
