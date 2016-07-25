@@ -207,7 +207,7 @@ nequil = 100 # number of NPT equilibration iterations
 #systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
 systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if ('Alanine' in cls.__name__) ] # alanine dipeptide systems
 precision_models_to_try = ['double'] # precision models to try
-platform_names_to_try = ['CUDA'] # platform names to try
+platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
 precision_models_to_try = ['double', 'mixed']
 constraint_tolerances_to_try = [1.0e-10]
 integrators_to_try = ['VelocityVerletIntegrator']
@@ -285,6 +285,7 @@ for index in range(rank, nsystems, size):
         if platform_name == 'CUDA':
             #platform.setPropertyDefaultValue('CudaDeviceIndex', '%d' % deviceid) # select Cuda device index    
             platform.setPropertyDefaultValue('CudaPrecision', precision_model)        
+            platform.setPropertyDefaultValue('CudaDeterministicForces', 'true')
         elif platform_name == 'OpenCL':
             #platform.setPropertyDefaultValue('OpenCLDeviceIndex', '%d' % deviceid) # select OpenCL device index
             platform.setPropertyDefaultValue('OpenCLPrecision', precision_model)        
@@ -295,7 +296,8 @@ for index in range(rank, nsystems, size):
         constructor = getattr(testsystems, system_name)
         import inspect
         if 'switch' in inspect.getargspec(constructor.__init__).args:
-            testsystem = constructor(switch=switching_flag)
+            switch_width = 2.0*unit.angstrom
+            testsystem = constructor(switch=switching_flag, switch_width=switch_width)
         else:
             testsystem = constructor()
         [system, positions] = [testsystem.system, testsystem.positions]

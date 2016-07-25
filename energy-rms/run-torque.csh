@@ -47,8 +47,10 @@ cat $PBS_GPUFILE
 # Only use one OpenMM CPU thread.
 setenv OPENMM_CPU_THREADS 1
 
+mkdir data
+
 date
-build_mpirun_configfile  --mpitype=conda "python test_energy_rms.py"
+build_mpirun_configfile "python test_energy_rms.py"
 mpirun -configfile configfile
 date
 
