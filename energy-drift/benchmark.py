@@ -133,9 +133,15 @@ def runOneTest(testName, options):
             initialSteps = 250
     if options.precision is not None and platform.getName() in ('CUDA', 'OpenCL'):
         properties['CudaPrecision'] = options.precision
-    
+
+    # Use switching function
+    for force in system.getForces():
+        if isinstance(force, mm.NonbondedForce):
+           nb.setUseSwitchingFunction(True)
+           nb.setSwitchingDistance(0.9)
+           nb.setReactionFieldDielectric(1e10)
+
     # Run the simulation.
-    
     integ.setConstraintTolerance(1e-8)
     if len(properties) > 0:
         context = mm.Context(system, integ, platform, properties)
