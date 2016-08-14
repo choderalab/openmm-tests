@@ -98,6 +98,8 @@ def runOneTest(testName, options):
             if isinstance(f, mm.AmoebaMultipoleForce) or isinstance(f, mm.AmoebaVdwForce) or isinstance(f, mm.AmoebaGeneralizedKirkwoodForce) or isinstance(f, mm.AmoebaWcaDispersionForce):
                 f.setForceGroup(1)
         dt = 0.002*unit.picoseconds
+        if options.timestep:
+            dt = options.timestep * unit.femtoseconds
         integ = mm.MTSIntegrator(dt, [(0,2), (1,1)])
     else:
         if explicit:
@@ -116,10 +118,14 @@ def runOneTest(testName, options):
             cutoff = 2*unit.nanometers
         if options.heavy:
             dt = 0.005*unit.picoseconds
+            if options.timestep:
+                dt = options.timestep * unit.femtoseconds
             constraints = app.AllBonds
             hydrogenMass = 4*unit.amu
         else:
             dt = 0.002*unit.picoseconds
+            if options.timestep:
+                dt = options.timestep * unit.femtoseconds
             constraints = app.HBonds
             hydrogenMass = None
         system = ff.createSystem(pdb.topology, nonbondedMethod=method, nonbondedCutoff=cutoff, constraints=constraints, hydrogenMass=hydrogenMass)
@@ -135,11 +141,14 @@ def runOneTest(testName, options):
         properties['CudaPrecision'] = options.precision
 
     # Use switching function
+    switch_width = 2.0 * unit.angstroms
     for force in system.getForces():
         if isinstance(force, mm.NonbondedForce):
-           nb.setUseSwitchingFunction(True)
-           nb.setSwitchingDistance(0.9)
-           nb.setReactionFieldDielectric(1e10)
+           force.setUseSwitchingFunction(True)
+           cutoff = force.getCutoffDistance()           
+           force.setSwitchingDistance(cutoff - switch_width)
+           force.setReactionFieldDielectric(1e10)
+           force.setEwaldErrorTolerance(1.0e-7)
 
     # Run the simulation.
     integ.setConstraintTolerance(1e-8)
@@ -197,6 +206,7 @@ parser.add_option('--heavy-hydrogens', action='store_true', default=False, dest=
 parser.add_option('--device', default=None, dest='device', help='device index for CUDA or OpenCL')
 parser.add_option('--precision', default='single', dest='precision', choices=('single', 'mixed', 'double'), help='precision mode for CUDA or OpenCL: single, mixed, or double [default: single]')
 parser.add_option('--drift', default=None, dest='drift', help='measure drift and generate a plot at the specified filename[default: None]')
+parser.add_option('--timestep', default=None, dest='timestep', type='float', help='timestep in femtoseconds [default: None]')
 (options, args) = parser.parse_args()
 if len(args) > 0:
     parser.error('Unknown argument: '+args[0])
