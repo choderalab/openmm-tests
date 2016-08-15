@@ -198,19 +198,22 @@ nrecords = int(simulation_length / record_interval)
 temperature = 298.0 * units.kelvin
 pressure = 1.0 * units.atmosphere # pressure for equilibration
 
-max_minimizer_iterations = 1000 # maximum number of minimizer iterations
+max_minimizer_iterations = 50 # maximum number of minimizer iterations
 ghmc_nsteps = 1000 # number of steps to generate new uncorrelated sample with GHMC
 ghmc_timestep = 0.50 * units.femtoseconds
 nequil = 100 # number of NPT equilibration iterations
 
 # DEBUG
-#systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
-systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if ('Alanine' in cls.__name__) ] # alanine dipeptide systems
-precision_models_to_try = ['double'] # precision models to try
+systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if (('Water' in cls.__name__) and ('Giant' not in cls.__name__)) ] # all non-giant water boxes
+#systems_to_try = [ cls.__name__ for cls in get_all_subclasses(testsystems.TestSystem) if ('Alanine' in cls.__name__) ] # alanine dipeptide systems
 platform_names_to_try = ['CUDA', 'OpenCL', 'CPU', 'Reference'] # platform names to try
-precision_models_to_try = ['double', 'mixed']
-constraint_tolerances_to_try = [1.0e-10]
+switching_to_try = [True] # switching function flags
+precision_models_to_try = ['mixed']
+pme_tolerances_to_try = [1.0e-7]
+constraint_tolerances_to_try = [1.0e-8]
+constraints_to_try = [None, app.HBonds] # constraint types to try
 integrators_to_try = ['VelocityVerletIntegrator']
+cutoffs_to_try = [0.9*units.nanometers, 1.2*units.nanometers, 1.5*units.nanometers]
 #nequil = 5 # number of NPT equilibration iterations
 
 verbose = True
@@ -218,7 +221,7 @@ verbose = True
 kT = kB * temperature # thermal energy
 beta = 1.0 / kT # inverse temperature
 
-options_list = [systems_to_try, integrators_to_try, switching_to_try, platform_names_to_try, precision_models_to_try, constraint_tolerances_to_try, pme_tolerances_to_try]
+options_list = [systems_to_try, integrators_to_try, switching_to_try, platform_names_to_try, precision_models_to_try, constraint_tolerances_to_try, pme_tolerances_to_try, cutoffs_to_try]
 print "nrecords = %d" % nrecords
 
 #=============================================================================================
@@ -264,11 +267,11 @@ nsystems = len(systems_to_try) * len(switching_to_try)
 for index in range(rank, nsystems, size):
 
     # Determine system to equilibrate.
-    [system_name, switching_flag] = select_options([systems_to_try, switching_to_try], index)
+    [system_name, switching_flag, cutoff] = select_options([systems_to_try, switching_to_try, cutoffs_to_try], index)
 
     # Determine NetCDF filename for equilibrated system.
-    netcdf_filename = 'data/system-%s-%s.nc' % (system_name, switching_flag)
-    log_filename = 'data/system-%s-%s.log' % (system_name, switching_flag)
+    netcdf_filename = 'data/system-%s-%s-%.1f.nc' % (system_name, switching_flag, cutoff/units.angstroms)
+    log_filename = 'data/system-%s-%s-%.1f.log' % (system_name, switching_flag, cutoff/units.angstroms)
 
     # Attempt to resume if file exists.
     if not os.path.exists(netcdf_filename):
@@ -276,8 +279,8 @@ for index in range(rank, nsystems, size):
 
         # Select platform.
         platform_name = 'CUDA'
-        precision_model = 'double'
-        pme_tolerance = 1.0e-6
+        precision_model = 'mixed'
+        pme_tolerance = 1.0e-7
     
         platform = openmm.Platform.getPlatformByName(platform_name)
         #deviceid = rank % ngpus
@@ -295,11 +298,19 @@ for index in range(rank, nsystems, size):
         logfile.write("Creating system %s...\n" % system_name)
         constructor = getattr(testsystems, system_name)
         import inspect
+        kwargs = dict()
         if 'switch' in inspect.getargspec(constructor.__init__).args:
-            switch_width = 2.0*unit.angstrom
-            testsystem = constructor(switch=switching_flag, switch_width=switch_width)
-        else:
-            testsystem = constructor()
+            kwargs['switch'] = switching_flag
+            kwargs['switch_width'] = 2.0*unit.angstrom
+        if 'nonbondedCutoff' in inspect.getargspec(constructor.__init__).args:
+            kwargs['nonbondedCutoff'] = cutoff
+        if 'cutoff' in inspect.getargspec(constructor.__init__).args:
+            kwargs['cutoff'] = cutoff
+        if 'box_edge' in inspect.getargspec(constructor.__init__).args:
+            kwargs['box_edge'] = 32.0 * units.angstroms
+        logfile.write('kwargs: ')
+        logfile.write(str(kwargs) + '\n')
+        testsystem = constructor(**kwargs)
         [system, positions] = [testsystem.system, testsystem.positions]
 
         # Set PME tolerance
@@ -313,6 +324,7 @@ for index in range(rank, nsystems, size):
 
         nparticles = system.getNumParticles()        
         logfile.write("Node %d: Box has %d particles\n" % (rank, nparticles))
+        logfile.flush()
 
         # Equilibrate with Monte Carlo barostat.
         from openmmtools.integrators import GHMCIntegrator
@@ -341,15 +353,21 @@ for index in range(rank, nsystems, size):
         # Minimize.        
         logfile.write("node %3d minimizing...\n" % rank)
         logfile.write("Energy = %.3f kcal/mol\n" % (ghmc_context.getState(getEnergy=True).getPotentialEnergy() / units.kilocalories_per_mole))
+        logfile.flush()
+        initial_time = time.time()
         openmm.LocalEnergyMinimizer.minimize(ghmc_context, 10 * units.kilojoules_per_mole / units.nanometer, max_minimizer_iterations)
-        logfile.write("node %3d minimization complete.\n" % rank)
+        final_time = time.time()
+        elapsed_time = final_time - initial_time
+        logfile.write("node %3d minimization complete (%.3f s)\n" % (rank, elapsed_time))
         logfile.write("Energy = %.3f kcal/mol\n" % (ghmc_context.getState(getEnergy=True).getPotentialEnergy() / units.kilocalories_per_mole))
+        logfile.flush()
 
         # Compute initial volume.
         state = ghmc_context.getState()
         box_vectors = state.getPeriodicBoxVectors(asNumpy=True)
         volume = box_vectors[0,0] * box_vectors[1,1] * box_vectors[2,2]
         logfile.write("node %d: initial volume %8.3f nm^3\n" % (rank, volume / units.nanometers**3))
+        logfile.flush()
 
         # Equilibrate system with NPT.
         volume_history = numpy.zeros([nequil], numpy.float64)
@@ -374,6 +392,7 @@ for index in range(rank, nsystems, size):
             ntrials = ghmc_integrator.getGlobalVariable(ghmc_global_variables['ntrials'])
             fraction_accepted = float(naccept) / float(ntrials)
             logfile.write("%64s : GHMC equil %5d / %5d | accepted %6d / %6d (%7.3f %%) | volume %8.3f nm^3 | max radius %8.3f nm | potential %12.3f kT | temperature %8.3f K\n" % (system_name, iteration, nequil, naccept, ntrials, fraction_accepted*100.0, volume / units.nanometers**3, max_radius / units.nanometers, potential / kT, instantaneous_kinetic_temperature / units.kelvin))
+            logfile.flush()
         
         # Extract coordinates and box vectors.
         state = ghmc_context.getState(getPositions=True, getVelocities=True)
@@ -413,7 +432,7 @@ for index in range(rank, noptionsets, size):
     #=============================================================================================
 
     try:
-        [system_name, integrator_name, switching_flag, platform_name, precision_model, constraint_tolerance, pme_tolerance] = select_options(options_list, index)
+        [system_name, integrator_name, switching_flag, platform_name, precision_model, constraint_tolerance, pme_tolerance, cutoff] = select_options(options_list, index)
     except:
         continue
 
@@ -421,8 +440,8 @@ for index in range(rank, noptionsets, size):
     # Create filename to store data in.
     #=============================================================================================
 
-    store_filename = 'data/test-%s-%s-%s-%s-%s-%s-%s.nc' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance)
-    text_filename = 'data/test-%s-%s-%s-%s-%s-%s-%s.txt' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance)
+    store_filename = 'data/test-%s-%s-%s-%s-%s-%s-%s-%s.nc' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance, '%.1f' % cutoff/units.angstroms)
+    text_filename = 'data/test-%s-%s-%s-%s-%s-%s-%s-%s.txt' % (system_name, integrator_name, str(switching_flag), platform_name, precision_model, '%.1e' % constraint_tolerance, '%.1e' % pme_tolerance, '%.1f' % cutoff/units.angstroms)
 
     # Skip if we already have written this file.
     if os.path.exists(store_filename) and os.path.exists(text_filename):
@@ -447,7 +466,7 @@ for index in range(rank, noptionsets, size):
     # Get positions and velocities from equilibrated NetCDF file. 
     #=============================================================================================
 
-    ncfile = netcdf.Dataset('data/system-%s-%s.nc' % (system_name, switching_flag), 'r')
+    ncfile = netcdf.Dataset('data/system-%s-%s-%.1f.nc' % (system_name, switching_flag, cutoff/units.angstroms), 'r')
     positions = units.Quantity(ncfile.variables['positions'][:,:], units.nanometers)
     velocities = units.Quantity(ncfile.variables['velocities'][:,:], units.nanometers / units.picoseconds)
     box_vectors = units.Quantity(ncfile.variables['box_vectors'][:,:], units.nanometers)
